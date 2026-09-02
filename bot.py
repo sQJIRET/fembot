@@ -8,6 +8,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
+from aiohttp import web
 
 load_dotenv()
 
@@ -517,10 +518,33 @@ async def give_admin(message: types.Message):
         await message.answer(f"❌ Ошибка: {e}")
 
 
+# ===== ВЕБ-СЕРВЕР ДЛЯ HEALTH CHECK (чтобы Render не убивал бота) =====
+
+async def health_check(request):
+    return web.Response(text="Bot is running")
+
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    app.router.add_get('/health', health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, host='0.0.0.0', port=port)
+    await site.start()
+    print(f"🌐 Health check server started on port {port}")
+
+
 async def main():
     logging.basicConfig(level=logging.INFO)
     print("🌸 Femboy Farm запущен!")
     print(f"👑 Админы: {ADMIN_IDS}")
+    
+    # Запускаем веб-сервер для health check
+    await start_web_server()
+    
+    # Запускаем бота
     await dp.start_polling()
 
 
