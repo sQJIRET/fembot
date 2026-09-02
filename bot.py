@@ -253,11 +253,9 @@ async def my_farm(message: types.Message):
         await message.answer("🌸 **Сначала запусти бота!**\nНапиши `/start` в личку бота, чтобы зарегистрироваться.")
         return
     
-    # Получаем баланс
     balance_result = await conn.fetchrow("SELECT coins FROM users WHERE tg_id = $1", user_id)
     balance = balance_result["coins"] if balance_result else 0
     
-    # Получаем инвентарь
     rows = await conn.fetch("""
         SELECT femboy_name, rarity, income 
         FROM inventory 
@@ -795,6 +793,13 @@ async def main():
     print("🌟 Тофик можно купить за 10,000 монет (доход 5,000)")
     print("📋 Все команды в /help_admin")
     print("📦 База данных: PostgreSQL")
+    
+    # ===== ФИКС ОШИБКИ TerminatedByOtherGetUpdates =====
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        print("✅ Webhook сброшен, конфликтов не будет!")
+    except Exception as e:
+        print(f"⚠️ Не удалось сбросить webhook: {e}")
 
     await start_web_server()
     await dp.start_polling()
