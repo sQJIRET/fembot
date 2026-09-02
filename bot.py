@@ -22,7 +22,6 @@ if not TOKEN:
 if not DATABASE_URL:
     raise ValueError("❌ DATABASE_URL не найден! Добавь PostgreSQL на Render!")
 
-# ========== ПОДКЛЮЧЕНИЕ К POSTGRESQL ==========
 conn = None
 
 async def init_db():
@@ -217,8 +216,9 @@ async def farm_text(message: types.Message):
             await message.answer(f"⏳ Подожди **{minutes}** минут!")
             return
     
-    result = await conn.fetchrow("SELECT SUM(income) FROM inventory WHERE tg_id = $1", user_id)
+    result = await conn.fetchrow("SELECT COALESCE(SUM(income), 0) FROM inventory WHERE tg_id = $1", user_id)
     total_income = result[0] if result else 0
+    
     if total_income == 0:
         await message.answer("😢 У тебя нет фембоев! Купи в /shop или /dailyshop")
         return
@@ -227,7 +227,7 @@ async def farm_text(message: types.Message):
                        total_income, datetime.now(), user_id)
     
     result = await conn.fetchrow("SELECT coins FROM users WHERE tg_id = $1", user_id)
-    balance = result["coins"]
+    balance = result["coins"] if result else 0
     await message.answer(
         f"💰 Ты собрал **{total_income}** дохода!\n"
         f"💳 Всего: **{balance}** монет",
@@ -253,6 +253,11 @@ async def my_farm(message: types.Message):
         await message.answer("🌸 **Сначала запусти бота!**\nНапиши `/start` в личку бота, чтобы зарегистрироваться.")
         return
     
+    # Получаем баланс
+    balance_result = await conn.fetchrow("SELECT coins FROM users WHERE tg_id = $1", user_id)
+    balance = balance_result["coins"] if balance_result else 0
+    
+    # Получаем инвентарь
     rows = await conn.fetch("""
         SELECT femboy_name, rarity, income 
         FROM inventory 
@@ -271,12 +276,15 @@ async def my_farm(message: types.Message):
     if not rows:
         await message.answer("😢 Нет фембоев!")
         return
+    
     text = "📋 **Твоя ферма:**\n\n"
     total_income = 0
     for row in rows:
-        text += f"{get_rarity_emoji(row['rarity'])} {row['femboy_name']} ({row['rarity']}) → {row['income']} доход\n"
-        total_income += row['income']
+        income = row['income'] if row['income'] is not None else 0
+        text += f"{get_rarity_emoji(row['rarity'])} {row['femboy_name']} ({row['rarity']}) → {income} доход\n"
+        total_income += income
     text += f"\n💰 Доход: **{total_income}**"
+    text += f"\n💳 Баланс: **{balance}** монет"
     await message.answer(text, parse_mode="Markdown")
 
 
@@ -713,7 +721,7 @@ async def user_info_id(message: types.Message):
     cards_count_result = await conn.fetchrow("SELECT COUNT(*) FROM inventory WHERE tg_id = $1", target_id)
     cards_count = cards_count_result[0] if cards_count_result else 0
 
-    total_income_result = await conn.fetchrow("SELECT SUM(income) FROM inventory WHERE tg_id = $1", target_id)
+    total_income_result = await conn.fetchrow("SELECT COALESCE(SUM(income), 0) FROM inventory WHERE tg_id = $1", target_id)
     total_income = total_income_result[0] if total_income_result else 0
 
     is_admin_result = await conn.fetchrow("SELECT tg_id FROM admins WHERE tg_id = $1", target_id)
